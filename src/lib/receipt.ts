@@ -1,9 +1,11 @@
 import type { PackingItem } from '@/types/item'
-import { totalCount, totalWeight, hiddenWeight } from '@/lib/itemStorage'
+import type { Luggage } from '@/types/luggage'
+import { totalCount, totalWeight } from '@/lib/itemStorage'
 
 const WIDTH = 480
 const PADDING = 24
 const ROW_HEIGHT = 28
+const SECTION_GAP = 26
 const FONT = '14px "Courier New", monospace'
 const BOLD_FONT = 'bold 14px "Courier New", monospace'
 
@@ -31,18 +33,41 @@ function dashedLine(ctx: CanvasRenderingContext2D, y: number) {
   ctx.restore()
 }
 
-export function renderReceipt(items: PackingItem[]): HTMLCanvasElement {
+const LUGGAGE_HEADER_HEIGHT = 30
+const LUGGAGE_COLUMNS_HEIGHT = 34
+const LUGGAGE_SUBTOTAL_HEIGHT = 60
+
+function luggageSectionHeight(itemCount: number): number {
+  return (
+    LUGGAGE_HEADER_HEIGHT +
+    LUGGAGE_COLUMNS_HEIGHT +
+    itemCount * ROW_HEIGHT +
+    LUGGAGE_SUBTOTAL_HEIGHT +
+    SECTION_GAP
+  )
+}
+
+export function renderReceipt(items: PackingItem[], luggages: Luggage[]): HTMLCanvasElement {
   const nameColX = PADDING
   const nameColWidth = 320
   const qtyColX = PADDING + nameColWidth
   const weightColX = qtyColX + 40
 
   const headerHeight = 90
-  const rowsHeight = items.length * ROW_HEIGHT
-  const excluded = hiddenWeight(items)
-  const totalsHeight = excluded > 0 ? 110 : 86
+  const grandTotalHeight = 60
   const bottomPadding = 40
-  const height = headerHeight + rowsHeight + totalsHeight + bottomPadding
+
+  const sections = luggages.map((luggage) => ({
+    luggage,
+    items: items.filter((item) => item.luggageId === luggage.id),
+  }))
+
+  const sectionsHeight = sections.reduce(
+    (sum, section) => sum + luggageSectionHeight(section.items.length),
+    0,
+  )
+
+  const height = headerHeight + sectionsHeight + grandTotalHeight + bottomPadding
 
   const canvas = document.createElement('canvas')
   const scale = 2
@@ -69,60 +94,75 @@ export function renderReceipt(items: PackingItem[]): HTMLCanvasElement {
   y += 18
   dashedLine(ctx, y)
 
-  y += 22
-  ctx.textAlign = 'left'
-  ctx.font = BOLD_FONT
-  ctx.fillText('ITEM', nameColX, y)
-  ctx.textAlign = 'right'
-  ctx.fillText('QTY', qtyColX + 30, y)
-  ctx.fillText('KG', weightColX + 45, y)
-
-  y += 12
-  dashedLine(ctx, y)
-
-  ctx.font = FONT
-  for (const item of items) {
-    y += ROW_HEIGHT
+  for (const section of sections) {
+    y += 26
     ctx.textAlign = 'left'
-    ctx.fillText(truncate(ctx, item.title, nameColWidth - 10), nameColX, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(`x${item.count}`, qtyColX + 30, y)
-    ctx.fillText(
-      fmt(item.weight !== undefined ? item.weight * item.count : undefined),
-      weightColX + 45,
-      y,
-    )
-  }
+    ctx.font = BOLD_FONT
+    ctx.fillText(section.luggage.name.toUpperCase(), nameColX, y)
 
-  y += 16
-  dashedLine(ctx, y)
+    y += 20
+    ctx.textAlign = 'left'
+    ctx.font = BOLD_FONT
+    ctx.fillText('ITEM', nameColX, y)
+    ctx.textAlign = 'right'
+    ctx.fillText('QTY', qtyColX + 30, y)
+    ctx.fillText('KG', weightColX + 45, y)
+
+    y += 12
+    dashedLine(ctx, y)
+
+    ctx.font = FONT
+    for (const item of section.items) {
+      y += ROW_HEIGHT
+      ctx.textAlign = 'left'
+      ctx.fillText(truncate(ctx, item.title, nameColWidth - 10), nameColX, y)
+      ctx.textAlign = 'right'
+      ctx.fillText(`x${item.count}`, qtyColX + 30, y)
+      ctx.fillText(
+        fmt(item.weight !== undefined ? item.weight * item.count : undefined),
+        weightColX + 45,
+        y,
+      )
+    }
+
+    y += 16
+    dashedLine(ctx, y)
+
+    y += 22
+    ctx.font = BOLD_FONT
+    ctx.textAlign = 'left'
+    ctx.fillText('ITEMS', nameColX, y)
+    ctx.textAlign = 'right'
+    ctx.fillText(String(totalCount(section.items)), WIDTH - PADDING, y)
+
+    y += 20
+    ctx.textAlign = 'left'
+    ctx.fillText('WEIGHT', nameColX, y)
+    ctx.textAlign = 'right'
+    ctx.fillText(`${totalWeight(section.items).toFixed(1)} kg`, WIDTH - PADDING, y)
+
+    y += SECTION_GAP
+    dashedLine(ctx, y)
+  }
 
   y += 26
   ctx.font = BOLD_FONT
   ctx.textAlign = 'left'
-  ctx.fillText('TOTAL ITEMS', nameColX, y)
+  ctx.fillText('GRAND TOTAL ITEMS', nameColX, y)
   ctx.textAlign = 'right'
   ctx.fillText(String(totalCount(items)), WIDTH - PADDING, y)
 
   y += 24
   ctx.textAlign = 'left'
-  ctx.fillText('TOTAL WEIGHT', nameColX, y)
+  ctx.fillText('GRAND TOTAL WEIGHT', nameColX, y)
   ctx.textAlign = 'right'
   ctx.fillText(`${totalWeight(items).toFixed(1)} kg`, WIDTH - PADDING, y)
-
-  if (excluded > 0) {
-    y += 24
-    ctx.textAlign = 'left'
-    ctx.fillText('EXCLUDED WEIGHT', nameColX, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(`${excluded.toFixed(1)} kg`, WIDTH - PADDING, y)
-  }
 
   return canvas
 }
 
-export function downloadReceipt(items: PackingItem[]) {
-  const canvas = renderReceipt(items)
+export function downloadReceipt(items: PackingItem[], luggages: Luggage[]) {
+  const canvas = renderReceipt(items, luggages)
   canvas.toBlob((blob) => {
     if (!blob) return
     const url = URL.createObjectURL(blob)

@@ -8,9 +8,14 @@ import {
 } from 'firebase/firestore'
 import { db, requireUid } from '@/lib/firebase'
 import type { PackingItem } from '@/types/item'
+import type { Luggage } from '@/types/luggage'
 
 function itemsCollection() {
   return collection(db, 'users', requireUid(), 'items')
+}
+
+function luggagesCollection() {
+  return collection(db, 'users', requireUid(), 'luggages')
 }
 
 export function genId(): string {
@@ -19,24 +24,33 @@ export function genId(): string {
 
 export function createItem(
   title: string,
-  weight?: number,
-  order = 0,
-  count = 1,
-  hidden?: boolean,
+  weight: number | undefined,
+  order: number,
+  count: number,
+  luggageId: string,
 ): PackingItem {
   return {
     id: genId(),
     title,
     count,
     weight,
-    hidden,
+    luggageId,
     order,
     lastModified: Date.now(),
   }
 }
 
-export function nextOrder(items: PackingItem[]): number {
-  return items.reduce((max, item) => Math.max(max, item.order), -1) + 1
+export function createLuggage(name: string, order = 0): Luggage {
+  return {
+    id: genId(),
+    name,
+    order,
+    lastModified: Date.now(),
+  }
+}
+
+export function nextOrder<T extends { order: number }>(list: T[]): number {
+  return list.reduce((max, entry) => Math.max(max, entry.order), -1) + 1
 }
 
 export async function getAllItems(): Promise<PackingItem[]> {
@@ -64,22 +78,24 @@ export async function deleteItem(id: string): Promise<void> {
   await deleteDoc(doc(itemsCollection(), id))
 }
 
+export async function getAllLuggages(): Promise<Luggage[]> {
+  const snap = await getDocs(luggagesCollection())
+  return snap.docs
+    .map((d) => d.data() as Luggage)
+    .sort((a, b) => (a.order ?? a.lastModified) - (b.order ?? b.lastModified))
+}
+
+export async function saveLuggage(luggage: Luggage): Promise<void> {
+  const toSave: Luggage = { ...luggage, lastModified: Date.now() }
+  await setDoc(doc(luggagesCollection(), luggage.id), toSave)
+}
+
 export function totalWeight(items: PackingItem[]): number {
-  return items.reduce(
-    (sum, item) => sum + (item.hidden ? 0 : (item.weight ?? 0) * item.count),
-    0,
-  )
+  return items.reduce((sum, item) => sum + (item.weight ?? 0) * item.count, 0)
 }
 
 export function totalCount(items: PackingItem[]): number {
-  return items.reduce((sum, item) => sum + (item.hidden ? 0 : item.count), 0)
-}
-
-export function hiddenWeight(items: PackingItem[]): number {
-  return items.reduce(
-    (sum, item) => sum + (item.hidden ? (item.weight ?? 0) * item.count : 0),
-    0,
-  )
+  return items.reduce((sum, item) => sum + item.count, 0)
 }
 
 export function formatWeight(kg: number): string {

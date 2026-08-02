@@ -3,7 +3,7 @@ export interface PackingItem {
   title: string
   count: number
   weight?: number
-  hidden?: boolean
+  luggageId: string
   order: number
   lastModified: number
 }

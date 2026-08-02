@@ -51,7 +51,7 @@ export function ListHeader({ sortKey, sortDir, onSort }: ListHeaderProps) {
       <span className="flex-1 text-xs font-medium text-muted-foreground">
         Name
       </span>
-      <span className="w-[108px] text-center text-xs font-medium text-muted-foreground">
+      <span className="w-[72px] text-center text-xs font-medium text-muted-foreground">
         Count
       </span>
       <SortButton
@@ -59,7 +59,7 @@ export function ListHeader({ sortKey, sortDir, onSort }: ListHeaderProps) {
         active={sortKey === 'weight'}
         dir={sortDir}
         onClick={() => onSort('weight')}
-        className="w-[108px] justify-center"
+        className="w-[72px] justify-center"
       />
     </div>
   )

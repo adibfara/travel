@@ -1,7 +1,7 @@
 import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Check, Eye, EyeOff, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,10 +19,19 @@ interface ItemRowProps {
   item: PackingItem
   onUpdate: (item: PackingItem) => void
   onDelete: (id: string) => void
+  onMoveLeft?: () => void
+  onMoveRight?: () => void
   dragDisabled?: boolean
 }
 
-export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps) {
+export function ItemRow({
+  item,
+  onUpdate,
+  onDelete,
+  onMoveLeft,
+  onMoveRight,
+  dragDisabled,
+}: ItemRowProps) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(item.title)
   const [count, setCount] = useState(item.count.toString())
@@ -88,10 +97,6 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
     setOpen(false)
   }
 
-  const toggleHidden = () => {
-    onUpdate({ ...item, hidden: !item.hidden })
-  }
-
   return (
     <>
       <div
@@ -100,7 +105,6 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
         className={cn(
           'flex items-center gap-1 border-b py-2 last:border-b-0 touch-none select-none',
           isDragging && 'relative z-10 bg-background opacity-80',
-          item.hidden && 'opacity-50',
         )}
         {...(dragDisabled ? {} : attributes)}
         {...(dragDisabled ? {} : listeners)}
@@ -149,16 +153,15 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
             onClick={openDialog}
             className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-accent"
           >
-            <span className="w-[108px] text-center text-sm text-muted-foreground">
+            <span className="w-[72px] text-center text-sm text-muted-foreground">
               {item.count > 1 ? `x${item.count}` : ''}
             </span>
             <span
               className={cn(
-                'w-[108px] text-center text-sm',
+                'w-[72px] text-center text-sm',
                 item.weight !== undefined
                   ? weightColorClass(item.weight * item.count)
                   : 'text-muted-foreground',
-                item.hidden && 'opacity-50',
               )}
             >
               {item.weight !== undefined
@@ -167,14 +170,26 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={toggleHidden}
-            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title={item.hidden ? 'Excluded from totals' : 'Included in totals'}
-          >
-            {item.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-          </button>
+          {onMoveLeft && (
+            <button
+              type="button"
+              onClick={onMoveLeft}
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Move to previous luggage"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
+          {onMoveRight && (
+            <button
+              type="button"
+              onClick={onMoveRight}
+              className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Move to next luggage"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          )}
         </div>
       </div>
 

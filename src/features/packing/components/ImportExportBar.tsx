@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import type { PackingItem } from '@/types/item'
+import type { Luggage } from '@/types/luggage'
 import type { ImportedItem } from '@/features/packing/hooks/usePackingItems'
 
 const REQUIRED_STRUCTURE = `[
@@ -18,12 +19,13 @@ const REQUIRED_STRUCTURE = `[
     "title": "Item name",
     "count": 2,
     "weight": 1.2,
-    "hidden": false
+    "luggage": "Main"
   }
 ]`
 
 interface ImportExportBarProps {
   items: PackingItem[]
+  luggages: Luggage[]
   onImport: (entries: ImportedItem[]) => Promise<void>
 }
 
@@ -40,7 +42,7 @@ function parseImport(raw: string): ImportedItem[] {
     if (typeof entry !== 'object' || entry === null) {
       throw new Error(`Item ${i + 1} is not an object`)
     }
-    const { title, count, weight, hidden } = entry as Record<string, unknown>
+    const { title, count, weight, luggage } = entry as Record<string, unknown>
     if (typeof title !== 'string' || !title.trim()) {
       throw new Error(`Item ${i + 1} is missing a "title" string`)
     }
@@ -50,19 +52,20 @@ function parseImport(raw: string): ImportedItem[] {
     if (weight !== undefined && typeof weight !== 'number') {
       throw new Error(`Item ${i + 1} has a non-numeric "weight"`)
     }
-    if (hidden !== undefined && typeof hidden !== 'boolean') {
-      throw new Error(`Item ${i + 1} has a non-boolean "hidden"`)
+    if (luggage !== undefined && typeof luggage !== 'string') {
+      throw new Error(`Item ${i + 1} has a non-string "luggage"`)
     }
-    return { title: title.trim(), count, weight, hidden }
+    return { title: title.trim(), count, weight, luggage }
   })
 }
 
-function exportItems(items: PackingItem[]) {
+function exportItems(items: PackingItem[], luggages: Luggage[]) {
+  const luggageNames = new Map(luggages.map((l) => [l.id, l.name]))
   const data: ImportedItem[] = items.map((item) => ({
     title: item.title,
     count: item.count,
     weight: item.weight,
-    hidden: item.hidden,
+    luggage: luggageNames.get(item.luggageId),
   }))
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
@@ -75,7 +78,7 @@ function exportItems(items: PackingItem[]) {
   URL.revokeObjectURL(url)
 }
 
-export function ImportExportBar({ items, onImport }: ImportExportBarProps) {
+export function ImportExportBar({ items, luggages, onImport }: ImportExportBarProps) {
   const [open, setOpen] = useState(false)
   const [raw, setRaw] = useState('')
   const [importing, setImporting] = useState(false)
@@ -126,7 +129,8 @@ export function ImportExportBar({ items, onImport }: ImportExportBarProps) {
             <DialogTitle>Import items</DialogTitle>
             <DialogDescription>
               Adds items to your current list. Paste JSON below or choose a
-              file.
+              file. "luggage" is optional — unrecognized or omitted names fall
+              back to the currently selected luggage.
             </DialogDescription>
           </DialogHeader>
 
@@ -183,7 +187,7 @@ export function ImportExportBar({ items, onImport }: ImportExportBarProps) {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => exportItems(items)}
+        onClick={() => exportItems(items, luggages)}
         disabled={items.length === 0}
       >
         <Download className="size-4" />
