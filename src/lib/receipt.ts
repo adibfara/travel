@@ -1,5 +1,5 @@
 import type { PackingItem } from '@/types/item'
-import { totalCount, totalWeight } from '@/lib/itemStorage'
+import { totalCount, totalWeight, hiddenWeight } from '@/lib/itemStorage'
 
 const WIDTH = 480
 const PADDING = 24
@@ -39,7 +39,8 @@ export function renderReceipt(items: PackingItem[]): HTMLCanvasElement {
 
   const headerHeight = 90
   const rowsHeight = items.length * ROW_HEIGHT
-  const totalsHeight = 86
+  const excluded = hiddenWeight(items)
+  const totalsHeight = excluded > 0 ? 110 : 86
   const bottomPadding = 40
   const height = headerHeight + rowsHeight + totalsHeight + bottomPadding
 
@@ -108,6 +109,14 @@ export function renderReceipt(items: PackingItem[]): HTMLCanvasElement {
   ctx.fillText('TOTAL WEIGHT', nameColX, y)
   ctx.textAlign = 'right'
   ctx.fillText(`${totalWeight(items).toFixed(1)} kg`, WIDTH - PADDING, y)
+
+  if (excluded > 0) {
+    y += 24
+    ctx.textAlign = 'left'
+    ctx.fillText('EXCLUDED WEIGHT', nameColX, y)
+    ctx.textAlign = 'right'
+    ctx.fillText(`${excluded.toFixed(1)} kg`, WIDTH - PADDING, y)
+  }
 
   return canvas
 }

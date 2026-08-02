@@ -14,6 +14,7 @@ export interface ImportedItem {
   title: string
   count?: number
   weight?: number
+  hidden?: boolean
 }
 
 export function usePackingItems() {
@@ -61,7 +62,7 @@ export function usePackingItems() {
   const importItems = async (entries: ImportedItem[]) => {
     const start = nextOrder(items)
     const newItems = entries.map((entry, i) =>
-      createItem(entry.title, entry.weight, start + i, entry.count ?? 1),
+      createItem(entry.title, entry.weight, start + i, entry.count ?? 1, entry.hidden),
     )
     const prevItems = items
     setItems((prev) => [...prev, ...newItems])

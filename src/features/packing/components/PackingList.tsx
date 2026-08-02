@@ -26,7 +26,7 @@ import {
   type SortDir,
   type SortKey,
 } from '@/features/packing/components/ListHeader'
-import { totalWeight, totalCount } from '@/lib/itemStorage'
+import { totalWeight, totalCount, hiddenWeight } from '@/lib/itemStorage'
 
 export function PackingList() {
   const { signOut } = useAuth()
@@ -142,6 +142,7 @@ export function PackingList() {
         items={sortedItems}
         count={totalCount(items)}
         weight={totalWeight(items)}
+        hiddenWeight={hiddenWeight(items)}
         onAdd={addItem}
       />
     </div>

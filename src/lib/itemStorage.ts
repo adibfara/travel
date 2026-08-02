@@ -22,12 +22,14 @@ export function createItem(
   weight?: number,
   order = 0,
   count = 1,
+  hidden?: boolean,
 ): PackingItem {
   return {
     id: genId(),
     title,
     count,
     weight,
+    hidden,
     order,
     lastModified: Date.now(),
   }
@@ -63,11 +65,21 @@ export async function deleteItem(id: string): Promise<void> {
 }
 
 export function totalWeight(items: PackingItem[]): number {
-  return items.reduce((sum, item) => sum + (item.weight ?? 0) * item.count, 0)
+  return items.reduce(
+    (sum, item) => sum + (item.hidden ? 0 : (item.weight ?? 0) * item.count),
+    0,
+  )
 }
 
 export function totalCount(items: PackingItem[]): number {
-  return items.reduce((sum, item) => sum + item.count, 0)
+  return items.reduce((sum, item) => sum + (item.hidden ? 0 : item.count), 0)
+}
+
+export function hiddenWeight(items: PackingItem[]): number {
+  return items.reduce(
+    (sum, item) => sum + (item.hidden ? (item.weight ?? 0) * item.count : 0),
+    0,
+  )
 }
 
 export function formatWeight(kg: number): string {

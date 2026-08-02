@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Check, Eye, EyeOff, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,8 +28,40 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
   const [count, setCount] = useState(item.count.toString())
   const [weight, setWeight] = useState(item.weight?.toString() ?? '')
 
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(item.title)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: dragDisabled })
+
+  const startEditTitle = () => {
+    setTitleDraft(item.title)
+    setEditingTitle(true)
+  }
+
+  const commitTitle = () => {
+    const trimmed = titleDraft.trim()
+    if (trimmed && trimmed !== item.title) {
+      onUpdate({ ...item, title: trimmed })
+    }
+    setEditingTitle(false)
+  }
+
+  const cancelTitle = () => {
+    setTitleDraft(item.title)
+    setEditingTitle(false)
+  }
+
+  const handleTitleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitTitle()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelTitle()
+    }
+  }
 
   const openDialog = () => {
     setTitle(item.title)
@@ -55,6 +88,10 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
     setOpen(false)
   }
 
+  const toggleHidden = () => {
+    onUpdate({ ...item, hidden: !item.hidden })
+  }
+
   return (
     <>
       <div
@@ -63,32 +100,82 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
         className={cn(
           'flex items-center gap-1 border-b py-2 last:border-b-0 touch-none select-none',
           isDragging && 'relative z-10 bg-background opacity-80',
+          item.hidden && 'opacity-50',
         )}
         {...(dragDisabled ? {} : attributes)}
         {...(dragDisabled ? {} : listeners)}
       >
-        <button
-          type="button"
-          onClick={openDialog}
-          className="flex flex-1 items-center gap-1 rounded-md px-2 py-1 text-left hover:bg-accent"
-        >
-          <span className="flex-1 truncate text-sm">{item.title}</span>
-          <span className="w-[108px] text-center text-sm text-muted-foreground">
-            {item.count > 1 ? `x${item.count}` : ''}
-          </span>
-          <span
-            className={cn(
-              'w-[108px] text-center text-sm',
-              item.weight !== undefined
-                ? weightColorClass(item.weight * item.count)
-                : 'text-muted-foreground',
-            )}
+        <div className="flex flex-1 items-center gap-1 rounded-md px-2 py-1">
+          {editingTitle ? (
+            <div className="flex flex-1 items-center gap-1">
+              <input
+                ref={titleInputRef}
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={commitTitle}
+                className="flex-1 truncate rounded-md border border-input bg-background px-1 py-0.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitTitle}
+                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Check className="size-4" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={cancelTitle}
+                className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={startEditTitle}
+              className="flex-1 truncate rounded-md border border-transparent px-1 py-0.5 text-left text-sm hover:border-input hover:bg-accent"
+            >
+              {item.title}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={openDialog}
+            className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-accent"
           >
-            {item.weight !== undefined
-              ? formatWeight(item.weight * item.count)
-              : ''}
-          </span>
-        </button>
+            <span className="w-[108px] text-center text-sm text-muted-foreground">
+              {item.count > 1 ? `x${item.count}` : ''}
+            </span>
+            <span
+              className={cn(
+                'w-[108px] text-center text-sm',
+                item.weight !== undefined
+                  ? weightColorClass(item.weight * item.count)
+                  : 'text-muted-foreground',
+                item.hidden && 'opacity-50',
+              )}
+            >
+              {item.weight !== undefined
+                ? formatWeight(item.weight * item.count)
+                : ''}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleHidden}
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title={item.hidden ? 'Excluded from totals' : 'Included in totals'}
+          >
+            {item.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -24,15 +24,16 @@ src/
   index.css
   lib/
     firebase.ts             # app, auth, googleProvider, db, requireUid()
-    itemStorage.ts          # CRUD on users/{uid}/items, genId/createItem, totalWeight/totalSize
+    itemStorage.ts          # CRUD on users/{uid}/items, genId/createItem, totalWeight/totalCount/hiddenWeight
+    receipt.ts               # canvas-rendered printable packing list (downloadReceipt), includes excluded-weight row when items are hidden
     utils.ts                # cn()
   shared/
     auth/                   # AuthProvider, useAuth, SignInScreen, AuthGate
     theme/                  # ThemeProvider, useTheme, ThemeToggle (localStorage key travelplanner-ui-theme)
-  types/item.ts             # PackingItem { id, title, weight?, size?, lastModified }
+  types/item.ts             # PackingItem { id, title, count, weight?, hidden?, order, lastModified }
   features/packing/
-    hooks/usePackingItems.ts
-    components/PackingList.tsx, AddItemRow.tsx, ItemRow.tsx, TotalsBar.tsx
+    hooks/usePackingItems.ts # addItem/updateItem/removeItem/importItems/reorderItems
+    components/PackingList.tsx, AddItemRow.tsx, ItemRow.tsx, TotalsBar.tsx, ImportExportBar.tsx
   components/ui/            # button, input, card, dropdown-menu, sonner (hand-written shadcn primitives)
 firestore.rules             # users/{uid}/** readable/writable only by that uid
 ```

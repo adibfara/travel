@@ -3,6 +3,7 @@ export interface PackingItem {
   title: string
   count: number
   weight?: number
+  hidden?: boolean
   order: number
   lastModified: number
 }

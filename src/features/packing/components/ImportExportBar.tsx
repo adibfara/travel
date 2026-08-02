@@ -17,7 +17,8 @@ const REQUIRED_STRUCTURE = `[
   {
     "title": "Item name",
     "count": 2,
-    "weight": 1.2
+    "weight": 1.2,
+    "hidden": false
   }
 ]`
 
@@ -39,7 +40,7 @@ function parseImport(raw: string): ImportedItem[] {
     if (typeof entry !== 'object' || entry === null) {
       throw new Error(`Item ${i + 1} is not an object`)
     }
-    const { title, count, weight } = entry as Record<string, unknown>
+    const { title, count, weight, hidden } = entry as Record<string, unknown>
     if (typeof title !== 'string' || !title.trim()) {
       throw new Error(`Item ${i + 1} is missing a "title" string`)
     }
@@ -49,7 +50,10 @@ function parseImport(raw: string): ImportedItem[] {
     if (weight !== undefined && typeof weight !== 'number') {
       throw new Error(`Item ${i + 1} has a non-numeric "weight"`)
     }
-    return { title: title.trim(), count, weight }
+    if (hidden !== undefined && typeof hidden !== 'boolean') {
+      throw new Error(`Item ${i + 1} has a non-boolean "hidden"`)
+    }
+    return { title: title.trim(), count, weight, hidden }
   })
 }
 
@@ -58,6 +62,7 @@ function exportItems(items: PackingItem[]) {
     title: item.title,
     count: item.count,
     weight: item.weight,
+    hidden: item.hidden,
   }))
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
