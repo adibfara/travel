@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { GripVertical } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Input } from '@/components/ui/input'
@@ -11,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { NumberStepper } from '@/features/packing/components/NumberStepper'
+import { formatWeight, weightColorClass } from '@/lib/itemStorage'
 import { cn } from '@/lib/utils'
 import type { PackingItem } from '@/types/item'
 
@@ -61,23 +61,12 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
         ref={setNodeRef}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={cn(
-          'flex items-center gap-1 border-b py-2 last:border-b-0',
+          'flex items-center gap-1 border-b py-2 last:border-b-0 touch-none select-none',
           isDragging && 'relative z-10 bg-background opacity-80',
         )}
+        {...(dragDisabled ? {} : attributes)}
+        {...(dragDisabled ? {} : listeners)}
       >
-        <button
-          type="button"
-          aria-label="Drag to reorder"
-          disabled={dragDisabled}
-          className={cn(
-            'touch-none cursor-grab text-muted-foreground active:cursor-grabbing',
-            dragDisabled && 'cursor-not-allowed opacity-30',
-          )}
-          {...(dragDisabled ? {} : attributes)}
-          {...(dragDisabled ? {} : listeners)}
-        >
-          <GripVertical className="size-4" />
-        </button>
         <button
           type="button"
           onClick={openDialog}
@@ -87,9 +76,16 @@ export function ItemRow({ item, onUpdate, onDelete, dragDisabled }: ItemRowProps
           <span className="w-[108px] text-center text-sm text-muted-foreground">
             {item.count > 1 ? `x${item.count}` : ''}
           </span>
-          <span className="w-[108px] text-center text-sm text-muted-foreground">
+          <span
+            className={cn(
+              'w-[108px] text-center text-sm',
+              item.weight !== undefined
+                ? weightColorClass(item.weight * item.count)
+                : 'text-muted-foreground',
+            )}
+          >
             {item.weight !== undefined
-              ? `${(item.weight * item.count).toFixed(1)} kg`
+              ? formatWeight(item.weight * item.count)
               : ''}
           </span>
         </button>

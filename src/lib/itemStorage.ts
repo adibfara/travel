@@ -69,3 +69,16 @@ export function totalWeight(items: PackingItem[]): number {
 export function totalCount(items: PackingItem[]): number {
   return items.reduce((sum, item) => sum + item.count, 0)
 }
+
+export function formatWeight(kg: number): string {
+  return kg > 0 && kg < 1
+    ? `${Math.round(kg * 1000)} g`
+    : `${kg.toFixed(1)} kg`
+}
+
+export function weightColorClass(kg: number): string {
+  if (kg < 0.15) return 'text-muted-foreground/50'
+  if (kg < 0.5) return 'text-muted-foreground'
+  if (kg < 3) return 'text-foreground/70 font-medium'
+  return 'text-foreground font-bold'
+}

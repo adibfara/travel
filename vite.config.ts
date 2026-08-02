@@ -5,6 +5,7 @@ import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  base: '/travel/',
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

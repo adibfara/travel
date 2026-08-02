@@ -64,9 +64,11 @@ export function PackingList() {
         })
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 400, tolerance: 8 },
+    }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
+      activationConstraint: { delay: 400, tolerance: 8 },
     }),
   )
 

@@ -1,6 +1,7 @@
 import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { downloadReceipt } from '@/lib/receipt'
+import { formatWeight } from '@/lib/itemStorage'
 import { AddItemRow } from '@/features/packing/components/AddItemRow'
 import type { PackingItem } from '@/types/item'
 
@@ -19,15 +20,15 @@ export function TotalsBar({ items, count, weight, onAdd }: TotalsBarProps) {
           {count} item{count === 1 ? '' : 's'}
         </span>
         <div className="flex items-center gap-4 text-sm font-medium">
-          <span>{weight.toFixed(1)} kg</span>
+          <span>{formatWeight(weight)}</span>
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            aria-label="Print"
             onClick={() => downloadReceipt(items)}
             disabled={items.length === 0}
           >
             <Printer className="size-4" />
-            Print
           </Button>
         </div>
       </div>
