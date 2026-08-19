@@ -144,23 +144,25 @@ export function PackingList() {
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-row justify-center gap-4 overflow-x-auto px-4 pb-4">
-              {luggages.map((luggage) => (
-                <LuggageColumn
-                  key={luggage.id}
-                  luggage={luggage}
-                  luggages={luggages}
-                  items={itemsByLuggage(luggage.id)}
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  onUpdateItem={updateItem}
-                  onDeleteItem={removeItem}
-                  onMoveItem={(item, targetLuggageId) => void moveItem(item, targetLuggageId)}
-                  onRenameLuggage={(l) => void updateLuggage(l)}
-                  dragDisabled={sortKey !== 'default'}
-                />
-              ))}
+            <div className="overflow-x-auto px-4 pb-4">
+              <div className="mx-auto flex w-max flex-row gap-4">
+                {luggages.map((luggage) => (
+                  <LuggageColumn
+                    key={luggage.id}
+                    luggage={luggage}
+                    luggages={luggages}
+                    items={itemsByLuggage(luggage.id)}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    onUpdateItem={updateItem}
+                    onDeleteItem={removeItem}
+                    onMoveItem={(item, targetLuggageId) => void moveItem(item, targetLuggageId)}
+                    onRenameLuggage={(l) => void updateLuggage(l)}
+                    dragDisabled={sortKey !== 'default'}
+                  />
+                ))}
+              </div>
             </div>
           </DndContext>
         )}

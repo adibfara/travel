@@ -142,7 +142,7 @@ export function ItemRow({
             <button
               type="button"
               onClick={startEditTitle}
-              className="flex-1 truncate rounded-md border border-transparent px-1 py-0.5 text-left text-sm hover:border-input hover:bg-accent"
+              className="min-w-0 flex-1 whitespace-normal break-words rounded-md border border-transparent px-1 py-0.5 text-left text-sm hover:border-input hover:bg-accent"
             >
               {item.title}
             </button>
