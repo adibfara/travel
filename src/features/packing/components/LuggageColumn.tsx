@@ -9,7 +9,13 @@ import {
   type SortKey,
 } from '@/features/packing/components/ListHeader'
 import { formatWeight, genId, totalCount, totalWeight } from '@/lib/itemStorage'
-import { bondRange, groupColorCss, groupRuns, randomGroupColor } from '@/lib/groups'
+import {
+  bondRange,
+  groupColorCss,
+  groupRuns,
+  randomGroupColor,
+  repairGroups,
+} from '@/lib/groups'
 import type { PackingItem } from '@/types/item'
 import type { Luggage } from '@/types/luggage'
 
@@ -81,14 +87,20 @@ export function LuggageColumn({
     setBond(gesture.current)
   }
 
+  /** Double-click drops this item and every item below it out of the group. */
   const ungroup = (itemId: string) => {
     const item = items.find((i) => i.id === itemId)
     if (!item?.groupId) return
-    onGroupChange(
+    const index = items.findIndex((i) => i.id === itemId)
+    const cleared = new Map(
       items
+        .slice(index)
         .filter((i) => i.groupId === item.groupId)
-        .map((i) => ({ ...i, groupId: undefined, groupColor: undefined })),
+        .map((i) => [i.id, { ...i, groupId: undefined, groupColor: undefined }]),
     )
+    // Whatever is left above may now be a lone member, which repairGroups dissolves.
+    const repaired = repairGroups(items.map((i) => cleared.get(i.id) ?? i))
+    onGroupChange(repaired.filter((i, idx) => i !== items[idx]))
   }
 
   useEffect(() => {
