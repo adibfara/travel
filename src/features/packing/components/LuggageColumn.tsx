@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Check, X } from 'lucide-react'
@@ -8,9 +8,13 @@ import {
   type SortDir,
   type SortKey,
 } from '@/features/packing/components/ListHeader'
-import { formatWeight, totalCount, totalWeight } from '@/lib/itemStorage'
+import { formatWeight, genId, totalCount, totalWeight } from '@/lib/itemStorage'
+import { bondRange, groupColorCss, groupRuns, randomGroupColor } from '@/lib/groups'
 import type { PackingItem } from '@/types/item'
 import type { Luggage } from '@/types/luggage'
+
+/** How far outside the column a bond gesture may stray before it cancels. */
+const BOND_CANCEL_MARGIN = 80
 
 interface LuggageColumnProps {
   luggage: Luggage
@@ -23,7 +27,14 @@ interface LuggageColumnProps {
   onDeleteItem: (id: string) => void
   onMoveItem: (item: PackingItem, targetLuggageId: string) => void
   onRenameLuggage: (luggage: Luggage) => void
+  onGroupChange: (items: PackingItem[]) => void
   dragDisabled?: boolean
+}
+
+interface BondGesture {
+  anchorId: string
+  hoverId: string
+  outside: boolean
 }
 
 export function LuggageColumn({
@@ -37,6 +48,7 @@ export function LuggageColumn({
   onDeleteItem,
   onMoveItem,
   onRenameLuggage,
+  onGroupChange,
   dragDisabled,
 }: LuggageColumnProps) {
   const { setNodeRef } = useDroppable({ id: luggage.id })
@@ -44,9 +56,143 @@ export function LuggageColumn({
   const [nameDraft, setNameDraft] = useState(luggage.name)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
+  const columnRef = useRef<HTMLDivElement | null>(null)
+  const rowRefs = useRef(new Map<string, HTMLElement>())
+  const gesture = useRef<BondGesture | null>(null)
+  const [bond, setBond] = useState<BondGesture | null>(null)
+  const bonding = bond !== null
+
   const index = luggages.findIndex((l) => l.id === luggage.id)
   const prevLuggage = index > 0 ? luggages[index - 1] : undefined
   const nextLuggage = index < luggages.length - 1 ? luggages[index + 1] : undefined
+
+  const setRootRef = (el: HTMLDivElement | null) => {
+    columnRef.current = el
+    setNodeRef(el)
+  }
+
+  const registerRow = (itemId: string, el: HTMLElement | null) => {
+    if (el) rowRefs.current.set(itemId, el)
+    else rowRefs.current.delete(itemId)
+  }
+
+  const startBond = (itemId: string) => {
+    gesture.current = { anchorId: itemId, hoverId: itemId, outside: false }
+    setBond(gesture.current)
+  }
+
+  const ungroup = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId)
+    if (!item?.groupId) return
+    onGroupChange(
+      items
+        .filter((i) => i.groupId === item.groupId)
+        .map((i) => ({ ...i, groupId: undefined, groupColor: undefined })),
+    )
+  }
+
+  useEffect(() => {
+    if (!bonding) return
+
+    const commitBond = (anchorId: string, hoverId: string) => {
+      const anchorIndex = items.findIndex((i) => i.id === anchorId)
+      const hoverIndex = items.findIndex((i) => i.id === hoverId)
+      if (anchorIndex === -1 || hoverIndex === -1) return
+      const { lo, hi } = bondRange(items, anchorIndex, hoverIndex)
+      if (hi <= lo) return
+      const members = items.slice(lo, hi + 1)
+      // Growing or merging keeps the topmost existing group's identity.
+      const existing = members.find((m) => m.groupId !== undefined)
+      const groupId = existing?.groupId ?? genId()
+      const groupColor =
+        existing?.groupColor ??
+        randomGroupColor(
+          items.filter((_, i) => i < lo || i > hi).map((i) => i.groupColor),
+        )
+      const changed = members
+        .filter((m) => m.groupId !== groupId || m.groupColor !== groupColor)
+        .map((m) => ({ ...m, groupId, groupColor }))
+      if (changed.length > 0) onGroupChange(changed)
+    }
+
+    const handleMove = (e: PointerEvent) => {
+      const current = gesture.current
+      if (!current) return
+
+      let hoverId: string | undefined
+      for (const item of items) {
+        const rect = rowRefs.current.get(item.id)?.getBoundingClientRect()
+        if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+          hoverId = item.id
+          break
+        }
+      }
+      if (!hoverId && items.length > 0) {
+        const first = rowRefs.current.get(items[0].id)?.getBoundingClientRect()
+        const last = rowRefs.current
+          .get(items[items.length - 1].id)
+          ?.getBoundingClientRect()
+        if (first && e.clientY < first.top) hoverId = items[0].id
+        else if (last && e.clientY > last.bottom) hoverId = items[items.length - 1].id
+      }
+
+      const rect = columnRef.current?.getBoundingClientRect()
+      const outside = rect
+        ? e.clientX < rect.left - BOND_CANCEL_MARGIN ||
+          e.clientX > rect.right + BOND_CANCEL_MARGIN ||
+          e.clientY < rect.top - BOND_CANCEL_MARGIN ||
+          e.clientY > rect.bottom + BOND_CANCEL_MARGIN
+        : false
+
+      const nextHover = hoverId ?? current.hoverId
+      if (nextHover === current.hoverId && outside === current.outside) return
+      gesture.current = { ...current, hoverId: nextHover, outside }
+      setBond(gesture.current)
+    }
+
+    const finish = (commit: boolean) => {
+      const current = gesture.current
+      gesture.current = null
+      setBond(null)
+      if (commit && current && !current.outside) {
+        commitBond(current.anchorId, current.hoverId)
+      }
+    }
+
+    const handleUp = () => finish(true)
+    const handleCancel = () => finish(false)
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') finish(false)
+    }
+
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleCancel)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleCancel)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [bonding, items, onGroupChange])
+
+  const previewRange = (() => {
+    if (!bond || bond.outside) return null
+    const anchorIndex = items.findIndex((i) => i.id === bond.anchorId)
+    const hoverIndex = items.findIndex((i) => i.id === bond.hoverId)
+    if (anchorIndex === -1 || hoverIndex === -1) return null
+    const range = bondRange(items, anchorIndex, hoverIndex)
+    return range.hi > range.lo ? range : null
+  })()
+
+  const previewColor = previewRange
+    ? items
+        .slice(previewRange.lo, previewRange.hi + 1)
+        .map((i) => i.groupColor)
+        .filter((c): c is string => c !== undefined)
+        .map(groupColorCss)[0]
+    : undefined
 
   const startEditName = () => {
     setNameDraft(luggage.name)
@@ -76,8 +222,39 @@ export function LuggageColumn({
     }
   }
 
+  const runs = groupRuns(items)
+
+  const renderRow = (item: PackingItem, position: number, isLast: boolean) => (
+    <ItemRow
+      key={item.id}
+      item={item}
+      onUpdate={onUpdateItem}
+      onDelete={onDeleteItem}
+      dragDisabled={dragDisabled}
+      isLast={isLast}
+      grouped={item.groupId !== undefined}
+      previewUp={
+        previewRange !== null &&
+        position > previewRange.lo &&
+        position <= previewRange.hi
+      }
+      previewDown={
+        previewRange !== null &&
+        position >= previewRange.lo &&
+        position < previewRange.hi
+      }
+      previewColor={previewColor}
+      groupingDisabled={dragDisabled}
+      onBondStart={startBond}
+      onUngroup={ungroup}
+      onRowRef={registerRow}
+      onMoveLeft={prevLuggage ? () => onMoveItem(item, prevLuggage.id) : undefined}
+      onMoveRight={nextLuggage ? () => onMoveItem(item, nextLuggage.id) : undefined}
+    />
+  )
+
   return (
-    <div ref={setNodeRef} className="flex w-160 shrink-0 flex-col rounded-lg border bg-card/50">
+    <div ref={setRootRef} className="flex w-160 shrink-0 flex-col rounded-lg border bg-card/50">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         {editingName ? (
           <div className="flex flex-1 items-center gap-1">
@@ -133,17 +310,25 @@ export function LuggageColumn({
             items={items.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            {items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onUpdate={onUpdateItem}
-                onDelete={onDeleteItem}
-                dragDisabled={dragDisabled}
-                onMoveLeft={prevLuggage ? () => onMoveItem(item, prevLuggage.id) : undefined}
-                onMoveRight={nextLuggage ? () => onMoveItem(item, nextLuggage.id) : undefined}
-              />
-            ))}
+            {runs.map((run) => {
+              const rows = run.items.map((item, i) =>
+                renderRow(item, run.start + i, i === run.items.length - 1),
+              )
+              if (run.groupId === undefined || run.items.length < 2) return rows
+              const css = groupColorCss(run.groupColor)
+              return (
+                <div
+                  key={run.groupId}
+                  className="-mx-2 my-1 rounded-md border px-2"
+                  style={{
+                    backgroundColor: `color-mix(in oklab, ${css} 10%, transparent)`,
+                    borderColor: `color-mix(in oklab, ${css} 35%, transparent)`,
+                  }}
+                >
+                  {rows}
+                </div>
+              )
+            })}
           </SortableContext>
         )}
       </div>

@@ -6,4 +6,6 @@ export interface PackingItem {
   luggageId: string
   order: number
   lastModified: number
+  groupId?: string
+  groupColor?: string
 }

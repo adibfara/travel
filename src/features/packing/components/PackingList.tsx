@@ -19,6 +19,7 @@ import { ImportExportBar } from '@/features/packing/components/ImportExportBar'
 import { AddLuggageDialog } from '@/features/packing/components/AddLuggageDialog'
 import type { SortDir, SortKey } from '@/features/packing/components/ListHeader'
 import { totalWeight, totalCount } from '@/lib/itemStorage'
+import { repairGroups } from '@/lib/groups'
 import type { PackingItem } from '@/types/item'
 
 export function PackingList() {
@@ -29,6 +30,7 @@ export function PackingList() {
     loading,
     addItem,
     updateItem,
+    updateItems,
     removeItem,
     importItems,
     reorderItems,
@@ -95,17 +97,57 @@ export function PackingList() {
     const targetLuggageId = overLuggage?.id ?? overItem?.luggageId
     if (!targetLuggageId) return
 
+    const sourceLuggageId = activeItem.luggageId
+    const sourceColumn = items
+      .filter((i) => i.luggageId === sourceLuggageId)
+      .sort((a, b) => a.order - b.order)
+
+    // Dragging the first row of a group carries the whole group along.
+    const groupMembers = activeItem.groupId
+      ? sourceColumn.filter((i) => i.groupId === activeItem.groupId)
+      : []
+    const wholeGroup = groupMembers.length > 1 && groupMembers[0].id === activeItem.id
+    const moving = wholeGroup ? groupMembers : [activeItem]
+    const movingIds = new Set(moving.map((i) => i.id))
+
     const destination = items
-      .filter((i) => i.luggageId === targetLuggageId && i.id !== activeItem.id)
+      .filter((i) => i.luggageId === targetLuggageId && !movingIds.has(i.id))
       .sort((a, b) => a.order - b.order)
 
     let insertIndex = destination.length
-    if (overItem && overItem.id !== activeItem.id) {
+    if (overItem && !movingIds.has(overItem.id)) {
       const foundIndex = destination.findIndex((i) => i.id === overItem.id)
       if (foundIndex !== -1) insertIndex = foundIndex
     }
-    destination.splice(insertIndex, 0, { ...activeItem, luggageId: targetLuggageId })
-    void reorderItems(destination)
+
+    const block = moving.map((i) => ({ ...i, luggageId: targetLuggageId }))
+
+    if (!wholeGroup) {
+      // A lone row joins the group it lands inside, keeps its group when dropped
+      // on that group's edge, and leaves it when dropped anywhere else.
+      const before = destination[insertIndex - 1]
+      const after = destination[insertIndex]
+      const single = block[0]
+      if (before?.groupId && before.groupId === after?.groupId) {
+        single.groupId = before.groupId
+        single.groupColor = before.groupColor
+      } else if (
+        single.groupId === undefined ||
+        (before?.groupId !== single.groupId && after?.groupId !== single.groupId)
+      ) {
+        single.groupId = undefined
+        single.groupColor = undefined
+      }
+    }
+
+    destination.splice(insertIndex, 0, ...block)
+    void reorderItems(repairGroups(destination))
+
+    if (targetLuggageId !== sourceLuggageId) {
+      const remaining = sourceColumn.filter((i) => !movingIds.has(i.id))
+      const repaired = repairGroups(remaining)
+      void updateItems(repaired.filter((i, idx) => i !== remaining[idx]))
+    }
   }
 
   const handleImport = (entries: Parameters<typeof importItems>[0]) =>
@@ -159,6 +201,7 @@ export function PackingList() {
                     onDeleteItem={removeItem}
                     onMoveItem={(item, targetLuggageId) => void moveItem(item, targetLuggageId)}
                     onRenameLuggage={(l) => void updateLuggage(l)}
+                    onGroupChange={(changed) => void updateItems(changed)}
                     dragDisabled={sortKey !== 'default'}
                   />
                 ))}

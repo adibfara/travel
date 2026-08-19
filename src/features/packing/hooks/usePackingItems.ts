@@ -4,6 +4,7 @@ import {
   createItem,
   createLuggage,
   deleteItem,
+  genId,
   getAllItems,
   getAllLuggages,
   nextOrder,
@@ -11,6 +12,7 @@ import {
   saveItems,
   saveLuggage,
 } from '@/lib/itemStorage'
+import { isGroupColor, randomGroupColor, repairGroups } from '@/lib/groups'
 import type { PackingItem } from '@/types/item'
 import type { Luggage } from '@/types/luggage'
 
@@ -19,6 +21,8 @@ export interface ImportedItem {
   count?: number
   weight?: number
   luggage?: string
+  /** Group color key; consecutive entries sharing one rebuild a group on import. */
+  group?: string
 }
 
 export function usePackingItems() {
@@ -73,6 +77,20 @@ export function usePackingItems() {
     }
   }
 
+  /** Batch write that only merges the given items by id (no re-ordering). */
+  const updateItems = async (updated: PackingItem[]) => {
+    if (updated.length === 0) return
+    const prevItems = items
+    const updatedMap = new Map(updated.map((item) => [item.id, item]))
+    setItems((prev) => prev.map((i) => updatedMap.get(i.id) ?? i))
+    try {
+      await saveItems(updated)
+    } catch {
+      toast.error('Failed to save changes')
+      setItems(prevItems)
+    }
+  }
+
   const removeItem = async (id: string) => {
     const prevItems = items
     setItems((prev) => prev.filter((i) => i.id !== id))
@@ -99,6 +117,28 @@ export function usePackingItems() {
       start[luggageId] = order + 1
       return createItem(entry.title, entry.weight, order, entry.count ?? 1, luggageId)
     })
+    // Rebuild groups from runs of consecutive entries sharing a colour in one luggage.
+    let runStart = 0
+    while (runStart < newItems.length) {
+      const color = entries[runStart].group
+      let runEnd = runStart
+      while (
+        runEnd + 1 < newItems.length &&
+        entries[runEnd + 1].group === color &&
+        newItems[runEnd + 1].luggageId === newItems[runStart].luggageId
+      ) {
+        runEnd++
+      }
+      if (color && runEnd > runStart) {
+        const groupId = genId()
+        const groupColor = isGroupColor(color) ? color : randomGroupColor([])
+        for (let i = runStart; i <= runEnd; i++) {
+          newItems[i].groupId = groupId
+          newItems[i].groupColor = groupColor
+        }
+      }
+      runStart = runEnd + 1
+    }
     const prevItems = items
     setItems((prev) => [...prev, ...newItems])
     try {
@@ -127,7 +167,21 @@ export function usePackingItems() {
     const destination = items.filter(
       (i) => i.luggageId === targetLuggageId && i.id !== item.id,
     )
-    await reorderItems([...destination, { ...item, luggageId: targetLuggageId }])
+    const source = items
+      .filter((i) => i.luggageId === item.luggageId && i.id !== item.id)
+      .sort((a, b) => a.order - b.order)
+    await reorderItems([
+      ...destination,
+      {
+        ...item,
+        luggageId: targetLuggageId,
+        groupId: undefined,
+        groupColor: undefined,
+      },
+    ])
+    const repaired = repairGroups(source)
+    const changed = repaired.filter((i, index) => i !== source[index])
+    await updateItems(changed)
   }
 
   const addLuggage = async (name: string): Promise<Luggage> => {
@@ -157,6 +211,7 @@ export function usePackingItems() {
     loading,
     addItem,
     updateItem,
+    updateItems,
     removeItem,
     importItems,
     reorderItems,

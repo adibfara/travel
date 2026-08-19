@@ -1,6 +1,7 @@
 import type { PackingItem } from '@/types/item'
 import type { Luggage } from '@/types/luggage'
 import { totalCount, totalWeight } from '@/lib/itemStorage'
+import { groupColorHex } from '@/lib/groups'
 
 const WIDTH = 480
 const PADDING = 24
@@ -59,7 +60,9 @@ export function renderReceipt(items: PackingItem[], luggages: Luggage[]): HTMLCa
 
   const sections = luggages.map((luggage) => ({
     luggage,
-    items: items.filter((item) => item.luggageId === luggage.id),
+    items: items
+      .filter((item) => item.luggageId === luggage.id)
+      .sort((a, b) => a.order - b.order),
   }))
 
   const sectionsHeight = sections.reduce(
@@ -114,6 +117,12 @@ export function renderReceipt(items: PackingItem[], luggages: Luggage[]): HTMLCa
     ctx.font = FONT
     for (const item of section.items) {
       y += ROW_HEIGHT
+      if (item.groupId !== undefined) {
+        // Colour spine only — consecutive group members form one continuous bar.
+        ctx.fillStyle = groupColorHex(item.groupColor)
+        ctx.fillRect(PADDING - 10, y - 20, 3, ROW_HEIGHT)
+        ctx.fillStyle = '#000000'
+      }
       ctx.textAlign = 'left'
       ctx.fillText(truncate(ctx, item.title, nameColWidth - 10), nameColX, y)
       ctx.textAlign = 'right'

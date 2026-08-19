@@ -19,7 +19,8 @@ const REQUIRED_STRUCTURE = `[
     "title": "Item name",
     "count": 2,
     "weight": 1.2,
-    "luggage": "Main"
+    "luggage": "Main",
+    "group": "emerald"
   }
 ]`
 
@@ -42,7 +43,10 @@ function parseImport(raw: string): ImportedItem[] {
     if (typeof entry !== 'object' || entry === null) {
       throw new Error(`Item ${i + 1} is not an object`)
     }
-    const { title, count, weight, luggage } = entry as Record<string, unknown>
+    const { title, count, weight, luggage, group } = entry as Record<
+      string,
+      unknown
+    >
     if (typeof title !== 'string' || !title.trim()) {
       throw new Error(`Item ${i + 1} is missing a "title" string`)
     }
@@ -55,17 +59,27 @@ function parseImport(raw: string): ImportedItem[] {
     if (luggage !== undefined && typeof luggage !== 'string') {
       throw new Error(`Item ${i + 1} has a non-string "luggage"`)
     }
-    return { title: title.trim(), count, weight, luggage }
+    if (group !== undefined && typeof group !== 'string') {
+      throw new Error(`Item ${i + 1} has a non-string "group"`)
+    }
+    return { title: title.trim(), count, weight, luggage, group }
   })
 }
 
 function exportItems(items: PackingItem[], luggages: Luggage[]) {
   const luggageNames = new Map(luggages.map((l) => [l.id, l.name]))
-  const data: ImportedItem[] = items.map((item) => ({
+  // Sorted per luggage so grouped runs stay adjacent and can be rebuilt on import.
+  const ordered = [...items].sort(
+    (a, b) =>
+      luggages.findIndex((l) => l.id === a.luggageId) -
+        luggages.findIndex((l) => l.id === b.luggageId) || a.order - b.order,
+  )
+  const data: ImportedItem[] = ordered.map((item) => ({
     title: item.title,
     count: item.count,
     weight: item.weight,
     luggage: luggageNames.get(item.luggageId),
+    group: item.groupId !== undefined ? item.groupColor : undefined,
   }))
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',

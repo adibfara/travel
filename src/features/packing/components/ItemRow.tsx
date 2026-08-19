@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { NumberStepper } from '@/features/packing/components/NumberStepper'
+import { GroupHandle } from '@/features/packing/components/GroupHandle'
 import { formatWeight, weightColorClass } from '@/lib/itemStorage'
 import { cn } from '@/lib/utils'
 import type { PackingItem } from '@/types/item'
@@ -22,6 +23,16 @@ interface ItemRowProps {
   onMoveLeft?: () => void
   onMoveRight?: () => void
   dragDisabled?: boolean
+  /** Last row of the whole column — keeps the divider off the final item. */
+  isLast?: boolean
+  grouped?: boolean
+  previewUp?: boolean
+  previewDown?: boolean
+  previewColor?: string
+  groupingDisabled?: boolean
+  onBondStart: (itemId: string) => void
+  onUngroup: (itemId: string) => void
+  onRowRef: (itemId: string, el: HTMLElement | null) => void
 }
 
 export function ItemRow({
@@ -31,6 +42,15 @@ export function ItemRow({
   onMoveLeft,
   onMoveRight,
   dragDisabled,
+  isLast,
+  grouped,
+  previewUp,
+  previewDown,
+  previewColor,
+  groupingDisabled,
+  onBondStart,
+  onUngroup,
+  onRowRef,
 }: ItemRowProps) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(item.title)
@@ -43,6 +63,11 @@ export function ItemRow({
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id, disabled: dragDisabled })
+
+  const setRowRef = (el: HTMLDivElement | null) => {
+    setNodeRef(el)
+    onRowRef(item.id, el)
+  }
 
   const startEditTitle = () => {
     setTitleDraft(item.title)
@@ -100,15 +125,28 @@ export function ItemRow({
   return (
     <>
       <div
-        ref={setNodeRef}
+        ref={setRowRef}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={cn(
-          'flex items-center gap-1 border-b py-2 last:border-b-0 touch-none select-none',
+          'flex items-center gap-1 py-2 touch-none select-none',
+          !isLast && 'border-b',
           isDragging && 'relative z-10 bg-background opacity-80',
         )}
         {...(dragDisabled ? {} : attributes)}
         {...(dragDisabled ? {} : listeners)}
       >
+        <GroupHandle
+          itemId={item.id}
+          groupColor={item.groupColor}
+          grouped={grouped}
+          previewUp={previewUp}
+          previewDown={previewDown}
+          previewColor={previewColor}
+          disabled={groupingDisabled}
+          onBondStart={onBondStart}
+          onUngroup={onUngroup}
+        />
+
         <div className="flex flex-1 items-center gap-1 rounded-md px-2 py-1">
           {editingTitle ? (
             <div className="flex flex-1 items-center gap-1">
