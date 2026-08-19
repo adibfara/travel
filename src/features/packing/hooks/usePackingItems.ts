@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   createItem,
   createLuggage,
   deleteItem,
+  deleteLuggage,
   genId,
   getAllItems,
   getAllLuggages,
   nextOrder,
+  sameItem,
   saveItem,
   saveItems,
   saveLuggage,
@@ -25,10 +27,74 @@ export interface ImportedItem {
   group?: string
 }
 
+/** Snapshot of the whole list, taken before each mutation so undo can restore it. */
+interface Snapshot {
+  items: PackingItem[]
+  luggages: Luggage[]
+}
+
+const MAX_HISTORY = 50
+
+interface WriteOptions {
+  /** Set when this write is part of a bigger action that already took a snapshot. */
+  skipHistory?: boolean
+}
+
 export function usePackingItems() {
   const [items, setItems] = useState<PackingItem[]>([])
   const [luggages, setLuggages] = useState<Luggage[]>([])
   const [loading, setLoading] = useState(true)
+  const history = useRef<Snapshot[]>([])
+  const [canUndo, setCanUndo] = useState(false)
+
+  const pushHistory = () => {
+    history.current = [...history.current, { items, luggages }].slice(-MAX_HISTORY)
+    setCanUndo(true)
+  }
+
+  /** Writes whatever differs between the restored snapshot and the live state. */
+  const restore = async (snapshot: Snapshot, from: Snapshot) => {
+    const currentItems = new Map(from.items.map((i) => [i.id, i]))
+    const snapshotIds = new Set(snapshot.items.map((i) => i.id))
+    const changedItems = snapshot.items.filter((i) => {
+      const current = currentItems.get(i.id)
+      return !current || !sameItem(current, i)
+    })
+    const removedItems = from.items.filter((i) => !snapshotIds.has(i.id))
+
+    const currentLuggages = new Map(from.luggages.map((l) => [l.id, l]))
+    const snapshotLuggageIds = new Set(snapshot.luggages.map((l) => l.id))
+    const changedLuggages = snapshot.luggages.filter((l) => {
+      const current = currentLuggages.get(l.id)
+      return !current || current.name !== l.name || current.order !== l.order
+    })
+    const removedLuggages = from.luggages.filter(
+      (l) => !snapshotLuggageIds.has(l.id),
+    )
+
+    if (changedItems.length > 0) await saveItems(changedItems)
+    await Promise.all(removedItems.map((i) => deleteItem(i.id)))
+    await Promise.all(changedLuggages.map((l) => saveLuggage(l)))
+    await Promise.all(removedLuggages.map((l) => deleteLuggage(l.id)))
+  }
+
+  const undo = async () => {
+    const snapshot = history.current[history.current.length - 1]
+    if (!snapshot) return
+    history.current = history.current.slice(0, -1)
+    setCanUndo(history.current.length > 0)
+
+    const from: Snapshot = { items, luggages }
+    setItems(snapshot.items)
+    setLuggages(snapshot.luggages)
+    try {
+      await restore(snapshot, from)
+    } catch {
+      toast.error('Failed to undo')
+      setItems(from.items)
+      setLuggages(from.luggages)
+    }
+  }
 
   useEffect(() => {
     Promise.all([getAllItems(), getAllLuggages()])
@@ -57,6 +123,7 @@ export function usePackingItems() {
     count: number,
     luggageId: string,
   ) => {
+    pushHistory()
     const order = nextOrder(items.filter((i) => i.luggageId === luggageId))
     const item = createItem(title, weight, order, count, luggageId)
     setItems((prev) => [...prev, item])
@@ -69,6 +136,7 @@ export function usePackingItems() {
   }
 
   const updateItem = async (updated: PackingItem) => {
+    pushHistory()
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
     try {
       await saveItem(updated)
@@ -78,8 +146,9 @@ export function usePackingItems() {
   }
 
   /** Batch write that only merges the given items by id (no re-ordering). */
-  const updateItems = async (updated: PackingItem[]) => {
+  const updateItems = async (updated: PackingItem[], options?: WriteOptions) => {
     if (updated.length === 0) return
+    if (!options?.skipHistory) pushHistory()
     const prevItems = items
     const updatedMap = new Map(updated.map((item) => [item.id, item]))
     setItems((prev) => prev.map((i) => updatedMap.get(i.id) ?? i))
@@ -92,6 +161,7 @@ export function usePackingItems() {
   }
 
   const removeItem = async (id: string) => {
+    pushHistory()
     const prevItems = items
     setItems((prev) => prev.filter((i) => i.id !== id))
     try {
@@ -103,6 +173,7 @@ export function usePackingItems() {
   }
 
   const importItems = async (entries: ImportedItem[], defaultLuggageId: string) => {
+    pushHistory()
     const start: Record<string, number> = {}
     const newItems = entries.map((entry) => {
       const luggageId =
@@ -150,7 +221,11 @@ export function usePackingItems() {
     }
   }
 
-  const reorderItems = async (orderedSubset: PackingItem[]) => {
+  const reorderItems = async (
+    orderedSubset: PackingItem[],
+    options?: WriteOptions,
+  ) => {
+    if (!options?.skipHistory) pushHistory()
     const prevItems = items
     const reordered = orderedSubset.map((item, i) => ({ ...item, order: i }))
     const reorderedMap = new Map(reordered.map((item) => [item.id, item]))
@@ -164,27 +239,32 @@ export function usePackingItems() {
   }
 
   const moveItem = async (item: PackingItem, targetLuggageId: string) => {
+    pushHistory()
     const destination = items.filter(
       (i) => i.luggageId === targetLuggageId && i.id !== item.id,
     )
     const source = items
       .filter((i) => i.luggageId === item.luggageId && i.id !== item.id)
       .sort((a, b) => a.order - b.order)
-    await reorderItems([
-      ...destination,
-      {
-        ...item,
-        luggageId: targetLuggageId,
-        groupId: undefined,
-        groupColor: undefined,
-      },
-    ])
+    await reorderItems(
+      [
+        ...destination,
+        {
+          ...item,
+          luggageId: targetLuggageId,
+          groupId: undefined,
+          groupColor: undefined,
+        },
+      ],
+      { skipHistory: true },
+    )
     const repaired = repairGroups(source)
     const changed = repaired.filter((i, index) => i !== source[index])
-    await updateItems(changed)
+    await updateItems(changed, { skipHistory: true })
   }
 
   const addLuggage = async (name: string): Promise<Luggage> => {
+    pushHistory()
     const luggage = createLuggage(name, nextOrder(luggages))
     setLuggages((prev) => [...prev, luggage])
     try {
@@ -197,6 +277,7 @@ export function usePackingItems() {
   }
 
   const updateLuggage = async (updated: Luggage) => {
+    pushHistory()
     setLuggages((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))
     try {
       await saveLuggage(updated)
@@ -218,5 +299,7 @@ export function usePackingItems() {
     moveItem,
     addLuggage,
     updateLuggage,
+    undo,
+    canUndo,
   }
 }

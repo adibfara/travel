@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plane, LogOut } from 'lucide-react'
+import { Plane, LogOut, Undo2 } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -37,6 +37,8 @@ export function PackingList() {
     moveItem,
     addLuggage,
     updateLuggage,
+    undo,
+    canUndo,
   } = usePackingItems()
 
   const [sortKey, setSortKey] = useState<SortKey>('default')
@@ -44,7 +46,8 @@ export function PackingList() {
   const [selectedLuggageId, setSelectedLuggageId] = useState('')
 
   useEffect(() => {
-    if (!selectedLuggageId && luggages.length > 0) {
+    const stillExists = luggages.some((l) => l.id === selectedLuggageId)
+    if (!stillExists && luggages.length > 0) {
       setSelectedLuggageId(luggages[luggages.length - 1].id)
     }
   }, [luggages, selectedLuggageId])
@@ -146,7 +149,9 @@ export function PackingList() {
     if (targetLuggageId !== sourceLuggageId) {
       const remaining = sourceColumn.filter((i) => !movingIds.has(i.id))
       const repaired = repairGroups(remaining)
-      void updateItems(repaired.filter((i, idx) => i !== remaining[idx]))
+      void updateItems(repaired.filter((i, idx) => i !== remaining[idx]), {
+        skipHistory: true,
+      })
     }
   }
 
@@ -161,6 +166,16 @@ export function PackingList() {
           <h1 className="text-lg font-semibold">Travel Planner</h1>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Undo"
+            title="Undo"
+            disabled={!canUndo}
+            onClick={() => void undo()}
+          >
+            <Undo2 className="size-4" />
+          </Button>
           <AddLuggageDialog onAdd={addLuggage} onCreated={(l) => setSelectedLuggageId(l.id)} />
           <ImportExportBar items={items} luggages={luggages} onImport={handleImport} />
           <ThemeToggle />

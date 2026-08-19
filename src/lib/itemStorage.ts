@@ -74,6 +74,19 @@ export async function saveItems(items: PackingItem[]): Promise<void> {
   await batch.commit()
 }
 
+/** Field-wise equality, ignoring `lastModified` — used to skip no-op writes. */
+export function sameItem(a: PackingItem, b: PackingItem): boolean {
+  return (
+    a.title === b.title &&
+    a.count === b.count &&
+    a.weight === b.weight &&
+    a.luggageId === b.luggageId &&
+    a.order === b.order &&
+    a.groupId === b.groupId &&
+    a.groupColor === b.groupColor
+  )
+}
+
 export async function deleteItem(id: string): Promise<void> {
   await deleteDoc(doc(itemsCollection(), id))
 }
@@ -88,6 +101,10 @@ export async function getAllLuggages(): Promise<Luggage[]> {
 export async function saveLuggage(luggage: Luggage): Promise<void> {
   const toSave: Luggage = { ...luggage, lastModified: Date.now() }
   await setDoc(doc(luggagesCollection(), luggage.id), toSave)
+}
+
+export async function deleteLuggage(id: string): Promise<void> {
+  await deleteDoc(doc(luggagesCollection(), id))
 }
 
 export function totalWeight(items: PackingItem[]): number {
